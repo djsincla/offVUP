@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>offVUP — offline VCF Upgrade Planner</title>
+<meta name="description" content="Builds a self-contained, double-clickable offline copy of VMware's VCF Upgrade Planner for customers who can't reach GitHub or the internet.">
+<style>
+  :root{
+    --orange:#F97316;
+    --orange-soft:#FFF1E6;
+    --orange-line:#FFD5B0;
+    --bg:#FFFFFF;
+    --surface:#FAFAF9;
+    --text:#1C1917;
+    --muted:#57534E;
+    --line:#E7E5E4;
+    --code-bg:#1C1917;
+    --code-text:#E7E5E4;
+    --radius:10px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --orange:#FB923C;
+      --orange-soft:#2A1810;
+      --orange-line:#7C3A12;
+      --bg:#0C0A09;
+      --surface:#161311;
+      --text:#F5F5F4;
+      --muted:#A8A29E;
+      --line:#292524;
+      --code-bg:#000000;
+      --code-text:#E7E5E4;
+    }
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:820px;margin:0 auto;padding:0 24px;}
+  a{color:var(--orange);}
+
+  /* ---- hero ---- */
+  header{
+    border-bottom:1px solid var(--line);
+    background:
+      radial-gradient(900px 320px at 50% -140px, var(--orange-soft), transparent 70%);
+  }
+  .hero{padding:76px 0 60px;text-align:center;}
+  .eyebrow{
+    display:inline-block;
+    font-size:12px;font-weight:650;letter-spacing:.10em;text-transform:uppercase;
+    color:var(--orange);
+    border:1px solid var(--orange-line);
+    background:var(--bg);
+    border-radius:999px;padding:5px 13px;margin-bottom:22px;
+  }
+  h1{
+    margin:0 0 14px;
+    font-size:clamp(40px,7vw,60px);
+    letter-spacing:-.035em;line-height:1.02;font-weight:750;
+  }
+  h1 .dot{color:var(--orange);}
+  .tagline{
+    margin:0 auto 30px;max-width:600px;
+    font-size:clamp(17px,2.2vw,20px);color:var(--muted);
+  }
+  .tagline strong{color:var(--text);font-weight:620;}
+  .cta{display:flex;gap:11px;justify-content:center;flex-wrap:wrap;}
+  .btn{
+    display:inline-block;text-decoration:none;font-weight:600;font-size:15px;
+    padding:11px 20px;border-radius:8px;border:1px solid transparent;
+    transition:transform .12s ease, filter .12s ease;
+  }
+  .btn:hover{transform:translateY(-1px);}
+  .btn-primary{background:var(--orange);color:#fff;}
+  .btn-primary:hover{filter:brightness(1.07);}
+  .btn-ghost{border-color:var(--line);color:var(--text);background:var(--bg);}
+  .btn-ghost:hover{border-color:var(--orange);color:var(--orange);}
+
+  /* ---- sections ---- */
+  section{padding:56px 0;border-bottom:1px solid var(--line);}
+  h2{
+    margin:0 0 8px;font-size:26px;letter-spacing:-.02em;font-weight:700;
+    display:flex;align-items:center;gap:11px;
+  }
+  h2::before{
+    content:"";width:3px;height:22px;border-radius:2px;background:var(--orange);flex:none;
+  }
+  .lede{margin:0 0 26px;color:var(--muted);max-width:660px;}
+  h3{margin:26px 0 8px;font-size:16px;font-weight:650;letter-spacing:-.01em;}
+  p{margin:0 0 14px;}
+
+  /* ---- the problem callout ---- */
+  .problem{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-left:3px solid var(--orange);
+    border-radius:var(--radius);
+    padding:20px 22px;margin:0 0 8px;
+  }
+  .problem p:last-child{margin-bottom:0;}
+  .broken{
+    display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:13px;background:var(--orange-soft);color:var(--orange);
+    border:1px solid var(--orange-line);border-radius:5px;padding:1px 7px;
+    font-weight:600;
+  }
+
+  /* ---- steps ---- */
+  ol.steps{margin:0;padding:0;list-style:none;counter-reset:s;}
+  ol.steps li{
+    counter-increment:s;position:relative;padding:0 0 22px 46px;
+  }
+  ol.steps li:not(:last-child)::after{
+    content:"";position:absolute;left:14px;top:30px;bottom:0;width:1px;background:var(--line);
+  }
+  ol.steps li::before{
+    content:counter(s);
+    position:absolute;left:0;top:0;
+    width:29px;height:29px;border-radius:50%;
+    background:var(--orange);color:#fff;
+    font-size:13px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+  }
+  ol.steps h3{margin:3px 0 5px;}
+  ol.steps p{color:var(--muted);margin:0;font-size:15px;}
+
+  /* ---- table ---- */
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table{border-collapse:collapse;width:100%;font-size:15px;min-width:520px;}
+  th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{
+    font-size:11.5px;text-transform:uppercase;letter-spacing:.075em;
+    color:var(--muted);font-weight:650;border-bottom-color:var(--line);
+  }
+  td:first-child{font-weight:600;white-space:nowrap;}
+  tbody tr:last-child td{border-bottom:none;}
+
+  /* ---- code ---- */
+  pre{
+    background:var(--code-bg);color:var(--code-text);
+    border-radius:var(--radius);padding:15px 17px;margin:0 0 14px;
+    overflow-x:auto;font-size:13.5px;line-height:1.6;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  pre .c{color:#78716C;}
+  pre .o{color:var(--orange);font-weight:600;}
+  code:not(pre code){
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:5px;padding:1.5px 5px;font-size:13.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+
+  /* ---- note ---- */
+  .note{
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:var(--radius);padding:16px 18px;font-size:14.5px;color:var(--muted);
+  }
+  .note strong{color:var(--text);}
+  .note p:last-child{margin-bottom:0;}
+
+  footer{padding:38px 0 56px;color:var(--muted);font-size:13.5px;text-align:center;}
+  footer p{margin:0 0 6px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hero">
+    <span class="eyebrow">Offline delivery</span>
+    <h1>offVUP<span class="dot">.</span></h1>
+    <p class="tagline">
+      Turns VMware's <strong>VCF Upgrade Planner</strong> into a self-contained zip
+      your customer can open by double-clicking — no web server, no internet, no admin rights.
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://github.com/djsincla/offVUP">View on GitHub</a>
+      <a class="btn btn-ghost" href="https://github.com/vmware/vcf-upgrade-planner">Upstream project</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>The problem</h2>
+    <p class="lede">
+      VMware's planner is excellent, but it's built to be <em>served over HTTP</em>.
+      You can't simply download a zip of it and send it to someone.
+    </p>
+    <div class="problem">
+      <p>
+        Each scenario page loads its data with a <code>fetch()</code> call. Browsers block
+        <code>fetch()</code> on <code>file://</code> URLs as a security rule — so an unzipped
+        copy opens, renders its shell, and then shows <span class="broken">No components available</span>
+        where the entire upgrade plan should be.
+      </p>
+      <p>
+        It fails quietly. The page looks like it loaded. Nothing tells you the data never arrived.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>What the build changes</h2>
+    <p class="lede">
+      Three changes, and nothing else. No planning logic or content is touched.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Change</th><th>Why</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Inline the scenario&nbsp;JSON</td>
+            <td>Embeds each page's data directly and drops the <code>fetch()</code> call. This is the actual <code>file://</code> fix.</td>
+          </tr>
+          <tr>
+            <td>Vendor mermaid</td>
+            <td>Upstream loads the diagram library from a CDN, so every workflow diagram would break on an isolated network. Now it ships in the zip.</td>
+          </tr>
+          <tr>
+            <td>Remove the tracker</td>
+            <td>Upstream embeds a <code>hits.sh</code> visitor-counter image. It leaks the viewer's IP and user-agent to a third-party server, and renders as a broken image offline.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="lede">One command. Python 3 and <code>git</code> are the only requirements.</p>
+    <ol class="steps">
+      <li>
+        <h3>Clone and run</h3>
+        <p>Upstream is cloned automatically on first run and refreshed on later ones — you don't need to fetch it yourself.</p>
+      </li>
+      <li>
+        <h3>Pages are rewritten</h3>
+        <p>Data is inlined, mermaid is vendored locally, the tracker is stripped. The build aborts loudly if upstream changes its <code>fetch()</code> pattern or any external reference survives — it won't hand you a silently broken zip.</p>
+      </li>
+      <li>
+        <h3>Ship the zip</h3>
+        <p>You get <code>dist/VCF-Upgrade-Planner.zip</code>, about 3.6&nbsp;MB. Small enough to email.</p>
+      </li>
+    </ol>
+<pre><span class="c"># build it</span>
+git clone https://github.com/djsincla/offVUP.git
+cd offVUP
+<span class="o">python3 build_offline.py</span>
+
+<span class="c"># -> dist/VCF-Upgrade-Planner.zip  (3.6 MB)</span></pre>
+    <h3>What your customer does</h3>
+    <p style="color:var(--muted);">
+      Unzip it. Double-click <code>index.html</code>. It opens in their browser and works.
+      Windows, Mac, and Linux, from the same file.
+    </p>
+    <div class="note">
+      <p><strong>Keep the folder together.</strong> The pages link to each other and share
+      local libraries, so moving <code>index.html</code> out on its own will stop it working.
+      This is called out in the README the customer receives.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Verified, not assumed</h2>
+    <p class="lede">
+      Every scenario page is rendered in headless Chrome from a real <code>file://</code> URL
+      and checked for the broken-state string. All 14 pass.
+    </p>
+    <p style="color:var(--muted);margin-bottom:0;">
+      That check is what proves the fix: unmodified upstream renders
+      <span class="broken">No components available</span> from <code>file://</code>, and the built
+      copy renders the full component list.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Honest limitations</h2>
+    <div class="note">
+      <p><strong>External links still need internet.</strong> The planner itself runs fully
+      offline, but some pages link out to Broadcom documentation and the VMware
+      Interoperability Matrix. Those links won't open on an isolated network. The planning
+      tool works regardless.</p>
+      <p style="margin-top:12px;"><strong>Licensing.</strong> Upstream is CA,&nbsp;Inc.-licensed and
+      explicitly permits modified redistribution in connection with CA,&nbsp;Inc. products,
+      provided the copyright notice ships with all copies. The build copies upstream's
+      <code>LICENSE</code> into the zip and generates <code>THIRD-PARTY-NOTICES.txt</code>
+      covering the vendored mermaid (MIT).</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>Not affiliated with or endorsed by VMware or Broadcom.</p>
+    <p>Repackages the open-source
+      <a href="https://github.com/vmware/vcf-upgrade-planner">VCF Upgrade Planner</a>.</p>
+  </div>
+</footer>
+
+</body>
+</html>
