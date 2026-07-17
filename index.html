@@ -7,31 +7,18 @@
 <meta name="description" content="Builds a self-contained, double-clickable offline copy of VMware's VCF Upgrade Planner for customers who can't reach GitHub or the internet.">
 <style>
   :root{
-    --orange:#F97316;
-    --orange-soft:#FFF1E6;
-    --orange-line:#FFD5B0;
-    --bg:#FFFFFF;
-    --surface:#FAFAF9;
-    --text:#1C1917;
-    --muted:#57534E;
-    --line:#E7E5E4;
-    --code-bg:#1C1917;
+    color-scheme:dark;
+    --orange:#FB923C;
+    --orange-soft:#2A1810;
+    --orange-line:#7C3A12;
+    --bg:#0C0A09;
+    --surface:#161311;
+    --text:#F5F5F4;
+    --muted:#A8A29E;
+    --line:#292524;
+    --code-bg:#000000;
     --code-text:#E7E5E4;
     --radius:10px;
-  }
-  @media (prefers-color-scheme: dark){
-    :root{
-      --orange:#FB923C;
-      --orange-soft:#2A1810;
-      --orange-line:#7C3A12;
-      --bg:#0C0A09;
-      --surface:#161311;
-      --text:#F5F5F4;
-      --muted:#A8A29E;
-      --line:#292524;
-      --code-bg:#000000;
-      --code-text:#E7E5E4;
-    }
   }
   *{box-sizing:border-box;}
   body{
@@ -144,6 +131,7 @@
   /* ---- code ---- */
   pre{
     background:var(--code-bg);color:var(--code-text);
+    border:1px solid var(--line);
     border-radius:var(--radius);padding:15px 17px;margin:0 0 14px;
     overflow-x:auto;font-size:13.5px;line-height:1.6;
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
