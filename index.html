@@ -37,7 +37,7 @@
     background:
       radial-gradient(900px 320px at 50% -140px, var(--orange-soft), transparent 70%);
   }
-  .hero{padding:76px 0 60px;text-align:center;}
+  .hero{padding-top:76px;padding-bottom:60px;text-align:center;}
   .eyebrow{
     display:inline-block;
     font-size:12px;font-weight:650;letter-spacing:.10em;text-transform:uppercase;
@@ -68,6 +68,13 @@
   .btn-primary:hover{filter:brightness(1.07);}
   .btn-ghost{border-color:var(--line);color:var(--text);background:var(--bg);}
   .btn-ghost:hover{border-color:var(--orange);color:var(--orange);}
+  .version{margin:18px 0 0;font-size:13.5px;color:var(--muted);}
+  .version code{font-size:12.5px;}
+
+  /* ---- what's new ---- */
+  ul.changes{margin:0;padding:0 0 0 20px;}
+  ul.changes li{margin:0 0 10px;}
+  ul.changes li::marker{color:var(--orange);}
 
   /* ---- sections ---- */
   section{padding:56px 0;border-bottom:1px solid var(--line);}
@@ -167,9 +174,15 @@
       your customer can open by double-clicking — no web server, no internet, no admin rights.
     </p>
     <div class="cta">
-      <a class="btn btn-primary" href="https://github.com/djsincla/offVUP">View on GitHub</a>
+      <a class="btn btn-primary" href="https://github.com/djsincla/offVUP/releases/latest/download/VCF-Upgrade-Planner.zip">Download 2026.10.22</a>
+      <a class="btn btn-ghost" href="https://github.com/djsincla/offVUP">View on GitHub</a>
       <a class="btn btn-ghost" href="https://github.com/vmware/vcf-upgrade-planner">Upstream project</a>
     </div>
+    <p class="version">
+      Version 2026.10.22 &middot; VMware's planner as of 22&nbsp;Oct&nbsp;2026
+      (<a href="https://github.com/vmware/vcf-upgrade-planner/commit/69e4228"><code>69e4228</code></a>)
+      &middot; 5.2&nbsp;MB &middot; <a href="https://github.com/djsincla/offVUP/releases">All releases</a>
+    </p>
   </div>
 </header>
 
@@ -182,7 +195,7 @@
     </p>
     <div class="problem">
       <p>
-        Each scenario page loads its data with a <code>fetch()</code> call. Browsers block
+        The scenario pages and the home page load their data with <code>fetch()</code> calls. Browsers block
         <code>fetch()</code> on <code>file://</code> URLs as a security rule — so an unzipped
         copy opens, renders its shell, and then shows <span class="broken">No components available</span>
         where the entire upgrade plan should be.
@@ -191,6 +204,32 @@
         It fails quietly. The page looks like it loaded. Nothing tells you the data never arrived.
       </p>
     </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>What's new in 2026.10.22</h2>
+    <p class="lede">
+      VMware's October update still doesn't run from a downloaded zip: unmodified, 1 of its
+      16 pages works offline. This release brings offVUP up to date with it.
+    </p>
+    <ul class="changes">
+      <li><strong>New VKS Upgrade Planner</strong> for vCenter, Supervisor, VKS and Kubernetes
+      Releases is included and works offline.</li>
+      <li><strong>Version-compatibility data</strong> on the home page (4&nbsp;MB, new upstream)
+      now loads offline.</li>
+      <li><strong>More tracking removed.</strong> Upstream now reports every export and Jira copy,
+      and the customer's VCF, NSX, Operations and Automation versions, to a third-party server.
+      All of it is stripped.</li>
+      <li><strong>Mermaid no longer bundled.</strong> Upstream replaced it with its own diagram
+      code, so the zip now contains no third-party code.</li>
+      <li><strong>Fixed a silent stale build.</strong> Refreshing upstream could fail and the
+      build would quietly package the old copy. It now always builds from VMware's latest
+      commit, or stops.</li>
+      <li><strong>Versioned releases.</strong> Each release is named after the date of the
+      VMware snapshot it contains, which is also stamped in the zip's <code>README.txt</code>.</li>
+    </ul>
   </div>
 </section>
 
@@ -220,7 +259,7 @@
           </tr>
           <tr>
             <td>Remove the trackers</td>
-            <td>Upstream reports page visits, every export and copy, and the customer's current and target VCF versions to a third-party <code>hits.sh</code> server. All of it is stripped. It would also render as broken images offline.</td>
+            <td>Upstream reports page visits, every export and copy, and the customer's VCF, NSX, Operations and Automation versions to a third-party <code>hits.sh</code> server. All of it is stripped. It would also render as broken images offline.</td>
           </tr>
         </tbody>
       </table>
@@ -243,7 +282,9 @@
       </li>
       <li>
         <h3>Ship the zip</h3>
-        <p>You get <code>dist/VCF-Upgrade-Planner.zip</code>, about 5&nbsp;MB. Small enough to email.</p>
+        <p>You get <code>dist/VCF-Upgrade-Planner.zip</code>, about 5&nbsp;MB. Small enough to email.
+        Or skip the build and download the latest from
+        <a href="https://github.com/djsincla/offVUP/releases">Releases</a>.</p>
       </li>
     </ol>
 <pre><span class="c"># build it</span>
@@ -269,13 +310,15 @@ cd offVUP
   <div class="wrap">
     <h2>Verified, not assumed</h2>
     <p class="lede">
-      Every scenario page is rendered in headless Chrome from a real <code>file://</code> URL
-      and checked for the broken-state string. All 14 pass.
+      The released zip is unzipped and every page opened from a real <code>file://</code> URL
+      with the network blocked, in Chrome, Firefox and Safari's WebKit engine. All 16 pages
+      load their data in all three, and selections made on the home page carry through to
+      the scenario pages.
     </p>
     <p style="color:var(--muted);margin-bottom:0;">
-      That check is what proves the fix: unmodified upstream renders
-      <span class="broken">No components available</span> from <code>file://</code>, and the built
-      copy renders the full component list.
+      The same test against VMware's own zip is what proves the fix: 1 of 16 pages works.
+      The rest render <span class="broken">No components available</span> or come up without
+      their data.
     </p>
   </div>
 </section>
@@ -288,6 +331,9 @@ cd offVUP
       offline, but some pages link out to Broadcom documentation and the VMware
       Interoperability Matrix, and a few embedded doc topics show images hosted online. Those won't load on an isolated network. The planning
       tool works regardless.</p>
+      <p style="margin-top:12px;"><strong>It's a snapshot.</strong> VMware updates the live
+      planner regularly; a zip stays at the version it was built from. Check the version
+      above against your customer's copy and send a fresh one when it changes.</p>
       <p style="margin-top:12px;"><strong>Licensing.</strong> Upstream is CA,&nbsp;Inc.-licensed and
       explicitly permits modified redistribution in connection with CA,&nbsp;Inc. products,
       provided the copyright notice ships with all copies. The build copies upstream's

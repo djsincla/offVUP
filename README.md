@@ -16,6 +16,22 @@ latest commit after. If the refresh fails, the build stops rather than packaging
 
 To rebuild after VMware updates the planner, just run it again.
 
+## Versions and releases
+
+Versions are the date of the upstream snapshot, e.g. `2026.10.22`. The build reads it
+from the upstream commit and stamps it, with the commit hash, into the customer's
+`README.txt`.
+
+Prebuilt zips are on [Releases](https://github.com/djsincla/offVUP/releases); the
+splash page's download button points at `releases/latest/download/VCF-Upgrade-Planner.zip`.
+To cut a release after upstream changes:
+
+```bash
+python3 build_offline.py                         # prints "Built <version> -> ..."
+# update the version, commit link, size and "What's new" in index.html; commit and push
+gh release create v<version> dist/VCF-Upgrade-Planner.zip --title "<version>" --notes "..."
+```
+
 ## Deliver
 
 Send the zip. The customer unzips it, double-clicks `index.html`, and it opens in

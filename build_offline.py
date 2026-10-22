@@ -85,6 +85,11 @@ window.trackSupervisorConfig = function () {};
 README = """VCF Upgrade Planning Tool - Offline Copy
 ========================================
 
+Version {version}: VMware's planner as of {date} (commit {commit}).
+VMware updates the planner regularly. Newer offline copies:
+https://github.com/djsincla/offVUP/releases
+
+
 HOW TO USE
 ----------
 1. Unzip this folder anywhere (Desktop is fine).
@@ -168,13 +173,25 @@ def resolve_upstream() -> Path:
         if r.returncode != 0:
             sys.exit(f"ERROR: could not clone upstream.\n{r.stderr.strip()}")
 
-    head = subprocess.run(
-        ["git", "-C", str(UPSTREAM_DIR), "log", "-1", "--format=%h %cs %s"],
+    return UPSTREAM_DIR
+
+
+def upstream_version(upstream: Path) -> tuple[str, str, str]:
+    """Return (version, date, commit) for the upstream snapshot being built.
+
+    The version is the upstream commit date, e.g. 2026.10.22, so a customer can
+    tell at a glance how current their copy is.
+    """
+    r = subprocess.run(
+        ["git", "-C", str(upstream), "log", "-1", "--format=%cs %h %s"],
         capture_output=True,
         text=True,
-    ).stdout.strip()
-    print(f"  upstream at {head}")
-    return UPSTREAM_DIR
+    )
+    if r.returncode != 0 or not r.stdout.strip():
+        sys.exit(f"ERROR: could not read upstream commit.\n{r.stderr.strip()}")
+    date, commit, subject = r.stdout.strip().split(" ", 2)
+    print(f"  upstream at {commit} {date} {subject}")
+    return date.replace("-", "."), date, commit
 
 
 def load_json(path: Path, failures: list[str], who: str):
@@ -192,6 +209,7 @@ def main() -> None:
     make_zip = "--no-zip" not in sys.argv
 
     upstream = resolve_upstream()
+    version, date, commit = upstream_version(upstream)
     src = upstream / "docs"
     if not src.is_dir():
         sys.exit(f"ERROR: {src} not found -- upstream layout changed?")
@@ -292,7 +310,9 @@ def main() -> None:
             print("  " + f, file=sys.stderr)
         sys.exit(1)
 
-    (OUT / "README.txt").write_text(README, encoding="utf-8")
+    (OUT / "README.txt").write_text(
+        README.format(version=version, date=date, commit=commit), encoding="utf-8"
+    )
     shutil.copy2(upstream / "LICENSE", OUT / "LICENSE")
 
     for junk in OUT.rglob(".DS_Store"):
@@ -319,9 +339,9 @@ def main() -> None:
                 if f.is_file():
                     z.write(f, f.relative_to(DIST))
         mb = zip_path.stat().st_size / 1_048_576
-        print(f"Built -> {zip_path} ({mb:.1f} MB)")
+        print(f"Built {version} -> {zip_path} ({mb:.1f} MB)")
     else:
-        print(f"Built -> {OUT}")
+        print(f"Built {version} -> {OUT}")
 
 
 if __name__ == "__main__":
