@@ -198,7 +198,7 @@
   <div class="wrap">
     <h2>What the build changes</h2>
     <p class="lede">
-      Three changes, and nothing else. No planning logic or content is touched.
+      Four changes, and nothing else. No planning logic or content is touched.
     </p>
     <div class="scroll">
       <table>
@@ -211,12 +211,16 @@
             <td>Embeds each page's data directly and drops the <code>fetch()</code> call. This is the actual <code>file://</code> fix.</td>
           </tr>
           <tr>
-            <td>Vendor mermaid</td>
-            <td>Upstream loads the diagram library from a CDN, so every workflow diagram would break on an isolated network. Now it ships in the zip.</td>
+            <td>Load compatibility data as a&nbsp;script</td>
+            <td>The home page's version-compatibility data ships as <code>compat-data.js</code>, loaded by a <code>&lt;script&gt;</code> tag, instead of being fetched.</td>
           </tr>
           <tr>
-            <td>Remove the tracker</td>
-            <td>Upstream embeds a <code>hits.sh</code> visitor-counter image. It leaks the viewer's IP and user-agent to a third-party server, and renders as a broken image offline.</td>
+            <td>Seed the Kubernetes matrix</td>
+            <td>Upstream already embeds the VKS upgrade matrix in every page, but fetches it first. The build points pages at the embedded copy, and aborts if that copy is stale.</td>
+          </tr>
+          <tr>
+            <td>Remove the trackers</td>
+            <td>Upstream reports page visits, every export and copy, and the customer's current and target VCF versions to a third-party <code>hits.sh</code> server. All of it is stripped. It would also render as broken images offline.</td>
           </tr>
         </tbody>
       </table>
@@ -231,15 +235,15 @@
     <ol class="steps">
       <li>
         <h3>Clone and run</h3>
-        <p>Upstream is cloned automatically on first run and refreshed on later ones — you don't need to fetch it yourself.</p>
+        <p>Upstream is cloned automatically on first run and refreshed to the latest commit on later ones — you don't need to fetch it yourself. If the refresh fails, the build stops rather than packaging a stale copy.</p>
       </li>
       <li>
         <h3>Pages are rewritten</h3>
-        <p>Data is inlined, mermaid is vendored locally, the tracker is stripped. The build aborts loudly if upstream changes its <code>fetch()</code> pattern or any external reference survives — it won't hand you a silently broken zip.</p>
+        <p>Data is inlined and the trackers are stripped. The build aborts loudly if upstream adds a <code>fetch()</code> it doesn't recognise or any tracker or external script survives — it won't hand you a silently broken zip.</p>
       </li>
       <li>
         <h3>Ship the zip</h3>
-        <p>You get <code>dist/VCF-Upgrade-Planner.zip</code>, about 3.6&nbsp;MB. Small enough to email.</p>
+        <p>You get <code>dist/VCF-Upgrade-Planner.zip</code>, about 5&nbsp;MB. Small enough to email.</p>
       </li>
     </ol>
 <pre><span class="c"># build it</span>
@@ -247,7 +251,7 @@ git clone https://github.com/djsincla/offVUP.git
 cd offVUP
 <span class="o">python3 build_offline.py</span>
 
-<span class="c"># -> dist/VCF-Upgrade-Planner.zip  (3.6 MB)</span></pre>
+<span class="c"># -> dist/VCF-Upgrade-Planner.zip  (5.2 MB)</span></pre>
     <h3>What your customer does</h3>
     <p style="color:var(--muted);">
       Unzip it. Double-click <code>index.html</code>. It opens in their browser and works.
@@ -282,13 +286,12 @@ cd offVUP
     <div class="note">
       <p><strong>External links still need internet.</strong> The planner itself runs fully
       offline, but some pages link out to Broadcom documentation and the VMware
-      Interoperability Matrix. Those links won't open on an isolated network. The planning
+      Interoperability Matrix, and a few embedded doc topics show images hosted online. Those won't load on an isolated network. The planning
       tool works regardless.</p>
       <p style="margin-top:12px;"><strong>Licensing.</strong> Upstream is CA,&nbsp;Inc.-licensed and
       explicitly permits modified redistribution in connection with CA,&nbsp;Inc. products,
       provided the copyright notice ships with all copies. The build copies upstream's
-      <code>LICENSE</code> into the zip and generates <code>THIRD-PARTY-NOTICES.txt</code>
-      covering the vendored mermaid (MIT).</p>
+      <code>LICENSE</code> into the zip. No third-party code is bundled.</p>
     </div>
   </div>
 </section>

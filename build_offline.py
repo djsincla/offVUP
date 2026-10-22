@@ -2,16 +2,18 @@
 """Build a self-contained, double-clickable copy of the VCF Upgrade Planner.
 
 Upstream (https://github.com/vmware/vcf-upgrade-planner) is designed to be served
-over HTTP. Its scenario pages fetch() their JSON data, which browsers block under
-file:// -- so an unzipped copy renders "No components available" and nothing else.
+over HTTP. Its pages fetch() their JSON data, which browsers block under file:// --
+so an unzipped copy renders "No components available" and nothing else.
 
 This script produces a copy that works by double-clicking index.html, with no web
 server and no internet connection, by:
 
   1. Inlining each scenario page's JSON data and removing the fetch() call.
-  2. Vendoring the mermaid diagram library, which upstream loads from a CDN.
-  3. Removing the hits.sh visitor-counter image, a third-party beacon that would
-     both leak the viewer's IP and render as a broken image offline.
+  2. Shipping the home page's compatibility data as a script instead of fetching it.
+  3. Seeding the Kubernetes upgrade matrix from the copy upstream already embeds in
+     each page, so the fetch() fallback for it never runs.
+  4. Removing the hits.sh visitor counters and usage beacons, third-party requests
+     that leak the viewer's IP and render as broken images offline.
 
 No planning logic or content is modified.
 
@@ -19,39 +21,66 @@ Usage:
     python3 build_offline.py            # build dist/ and the zip
     python3 build_offline.py --no-zip   # build the folder only
 
-To refresh after upstream changes:  git pull && python3 build_offline.py
+To refresh after upstream changes, just run it again.
 """
 import json
 import re
 import shutil
 import subprocess
 import sys
-import urllib.request
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / "dist"
 OUT = DIST / "VCF-Upgrade-Planner"
-VENDOR = ROOT / "vendor"
 
 UPSTREAM_URL = "https://github.com/vmware/vcf-upgrade-planner.git"
 UPSTREAM_DIR = ROOT / "upstream"
-
-# Pinned for reproducible builds. Upstream floats on mermaid@11.
-MERMAID_VERSION = "11.16.0"
-MERMAID_URL = f"https://cdn.jsdelivr.net/npm/mermaid@{MERMAID_VERSION}/dist/mermaid.min.js"
-MERMAID_LICENSE_URL = "https://raw.githubusercontent.com/mermaid-js/mermaid/develop/LICENSE"
 
 FETCH_RE = re.compile(
     r"const\s+response\s*=\s*await\s+fetch\(\s*['\"](?P<json>[^'\"]+\.json)['\"]\s*\);"
     r"\s*\n\s*upgradeData\s*=\s*await\s+response\.json\(\);"
 )
-MERMAID_RE = re.compile(r'src="https://cdn\.jsdelivr\.net/npm/mermaid@11/dist/mermaid\.min\.js"')
+# index.html's loader for compat-data.json (the version-compatibility tables).
+COMPAT_FILE = "compat-data.json"
+COMPAT_FETCH_RE = re.compile(
+    r"fetch\(DATA_FILE\)\s*\.then\(function\(r\)\{\s*return r\.ok \? r\.json\(\) : Promise\.reject\(r\.status\);\s*\}\)"
+)
+# Upstream embeds k8s-upgrade-matrix.json in every page and only fetch()es it as a
+# fallback. The fallbacks are safe to leave once the embedded copy is seeded.
+MATRIX_FILE = "k8s-upgrade-matrix.json"
+MATRIX_BLOCK_RE = re.compile(
+    r'<script type="application/json" id="matrix-data">(?P<json>.*?)</script>', re.S
+)
+MATRIX_FALLBACK_RE = re.compile(r"fetch\(\s*['\"]k8s-upgrade-matrix\.json['\"]\s*\)")
+# A real call, not prose like "<code>fetch()</code>".
+FETCH_CALL_RE = re.compile(r"\bfetch\((?!\))")
+
+# Sidebar badge as an inline <img> (scenario pages).
 COUNTER_RE = re.compile(
     r'\s*<div class="sidebar-counter">\s*<img src="https://hits\.sh/[^"]*"[^>]*/?>\s*</div>',
     re.S,
 )
+# Usage beacons fired on export and copy, e.g.
+#   if ('https://hits.sh/...') new Image().src = 'https://hits.sh/...';
+BEACON_RE = re.compile(
+    r"(?:if\s*\(\s*'https://hits\.sh/[^']*'\s*\)\s*)?"
+    r"new Image\(\)\.src\s*=\s*'https://hits\.sh/[^']*';"
+)
+# Reports the viewer's current and target VCF versions, read from localStorage:
+#   <script>(function(){ var B='https://hits.sh/.../versions-r4/'; ... })();</script>
+VERSION_BEACON_RE = re.compile(
+    r"<script>\s*\(function\(\)\{\s*var B='https://hits\.sh/[^']*';.*?\}\)\(\);\s*</script>",
+    re.S,
+)
+# counter.js renders the badges and defines the tracking hooks pages call into.
+# Replaced with no-ops so those calls still resolve.
+COUNTER_JS_STUB = """\
+// Offline build: upstream's third-party visitor counter and usage tracking removed.
+window.trackEvent = function () {};
+window.trackSupervisorConfig = function () {};
+"""
 
 README = """VCF Upgrade Planning Tool - Offline Copy
 ========================================
@@ -74,7 +103,8 @@ WHAT IT DOES
 Interactive step-by-step planning for VMware Cloud Foundation (VCF)
 upgrades to 9.1. Pick your scenario from the start page, answer the
 questions about your environment, and it produces your upgrade phases,
-networking and resource requirements, and an overall workflow.
+networking and resource requirements, and an overall workflow. A
+separate planner covers vSphere Kubernetes Service (VKS) upgrades.
 
 Plans can be exported to PDF from within the tool.
 
@@ -82,8 +112,9 @@ Plans can be exported to PDF from within the tool.
 NOTE ON EXTERNAL LINKS
 ----------------------
 The planner itself runs fully offline. Some pages link out to Broadcom
-documentation and the VMware Interoperability Matrix. Those links need
-an internet connection, and will not open on an isolated network. The
+documentation and the VMware Interoperability Matrix, and a few
+embedded documentation topics show images hosted online. Those need an
+internet connection and will not open on an isolated network. The
 planning tool works regardless.
 
 
@@ -92,26 +123,11 @@ SOURCE
 This is a repackaged copy of the open-source VMware tool at:
 https://github.com/vmware/vcf-upgrade-planner
 
-It has been modified only to run offline: the scenario data is embedded
-directly in the pages, the diagram library is included locally, and a
-third-party visitor-tracking image has been removed. No planning logic
-or content has been changed.
+It has been modified only to run offline: the planning data is
+embedded directly in the pages, and third-party visitor-tracking
+requests have been removed. No planning logic or content has been
+changed.
 """
-
-
-def fetch_cached(url: str, dest: Path) -> Path:
-    """Download url to dest unless already cached."""
-    if dest.exists() and dest.stat().st_size > 0:
-        print(f"  cached   {dest.name}")
-        return dest
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    print(f"  fetching {dest.name} <- {url}")
-    with urllib.request.urlopen(url, timeout=60) as r:
-        data = r.read()
-    if not data:
-        sys.exit(f"ERROR: empty download from {url}")
-    dest.write_bytes(data)
-    return dest
 
 
 def resolve_upstream() -> Path:
@@ -126,24 +142,50 @@ def resolve_upstream() -> Path:
 
     if (UPSTREAM_DIR / "docs").is_dir():
         print(f"Refreshing upstream clone: {UPSTREAM_DIR}")
+        # A depth-1 clone can't fast-forward: the new commit's parent isn't in the
+        # local history, so `git pull --ff-only` refuses. upstream/ is a generated
+        # mirror, so fetch the latest tip and reset onto it instead.
+        for cmd in (
+            ["fetch", "--depth", "1", "origin", "HEAD"],
+            ["reset", "--hard", "FETCH_HEAD"],
+        ):
+            r = subprocess.run(
+                ["git", "-C", str(UPSTREAM_DIR), *cmd], capture_output=True, text=True
+            )
+            if r.returncode != 0:
+                # Building from a stale copy would silently ship outdated plans.
+                sys.exit(
+                    f"ERROR: could not refresh upstream (git {cmd[0]}).\n{r.stderr.strip()}\n"
+                    f"Delete {UPSTREAM_DIR} to re-clone, or check network access."
+                )
+    else:
+        print(f"Cloning upstream -> {UPSTREAM_DIR}")
         r = subprocess.run(
-            ["git", "-C", str(UPSTREAM_DIR), "pull", "--depth", "1", "--ff-only"],
+            ["git", "clone", "--depth", "1", UPSTREAM_URL, str(UPSTREAM_DIR)],
             capture_output=True,
             text=True,
         )
         if r.returncode != 0:
-            print(f"  WARNING: pull failed, using existing copy ({r.stderr.strip().splitlines()[-1:]})")
-        return UPSTREAM_DIR
+            sys.exit(f"ERROR: could not clone upstream.\n{r.stderr.strip()}")
 
-    print(f"Cloning upstream -> {UPSTREAM_DIR}")
-    r = subprocess.run(
-        ["git", "clone", "--depth", "1", UPSTREAM_URL, str(UPSTREAM_DIR)],
+    head = subprocess.run(
+        ["git", "-C", str(UPSTREAM_DIR), "log", "-1", "--format=%h %cs %s"],
         capture_output=True,
         text=True,
-    )
-    if r.returncode != 0:
-        sys.exit(f"ERROR: could not clone upstream.\n{r.stderr.strip()}")
+    ).stdout.strip()
+    print(f"  upstream at {head}")
     return UPSTREAM_DIR
+
+
+def load_json(path: Path, failures: list[str], who: str):
+    if not path.exists():
+        failures.append(f"{who}: missing data file {path.name}")
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        failures.append(f"{who}: {path.name} is not valid JSON ({e})")
+        return None
 
 
 def main() -> None:
@@ -154,58 +196,92 @@ def main() -> None:
     if not src.is_dir():
         sys.exit(f"ERROR: {src} not found -- upstream layout changed?")
 
-    print("\nVendoring third-party assets:")
-    mermaid = fetch_cached(MERMAID_URL, VENDOR / "mermaid.min.js")
-    mermaid_license = fetch_cached(MERMAID_LICENSE_URL, VENDOR / "mermaid-LICENSE")
-
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
 
-    shutil.copy2(mermaid, OUT / "mermaid.min.js")
-    shutil.copy2(src / "docs_inline.js", OUT / "docs_inline.js")
+    print("\nCopying scripts:")
+    for js in sorted(src.glob("*.js")):
+        if js.name == "counter.js":
+            (OUT / js.name).write_text(COUNTER_JS_STUB, encoding="utf-8")
+            print(f"  {js.name:<74} replaced with no-op stub")
+        else:
+            shutil.copy2(js, OUT / js.name)
+            print(f"  {js.name}")
+
+    failures: list[str] = []
+    matrix = load_json(src / MATRIX_FILE, failures, "build")
 
     print("\nRewriting pages:")
-    failures: list[str] = []
     inlined = 0
     for html in sorted(src.glob("*.html")):
         text = html.read_text(encoding="utf-8")
         name = html.name
         notes: list[str] = []
+        if "</head>" not in text:
+            failures.append(f"{name}: no </head> to inject into")
+            continue
 
         m = FETCH_RE.search(text)
         if m:
-            data_file = src / m.group("json")
-            if not data_file.exists():
-                failures.append(f"{name}: missing data file {m.group('json')}")
-                continue
-            try:
-                payload = json.loads(data_file.read_text(encoding="utf-8"))
-            except json.JSONDecodeError as e:
-                failures.append(f"{name}: {m.group('json')} is not valid JSON ({e})")
+            payload = load_json(src / m.group("json"), failures, name)
+            if payload is None:
                 continue
             blob = json.dumps(payload, separators=(",", ":"))
             # Neutralise sequences that would terminate the <script> early.
             blob = blob.replace("</", "<\\/").replace("<!--", "<\\!--")
-            if "</head>" not in text:
-                failures.append(f"{name}: no </head> to inject into")
-                continue
             text = FETCH_RE.sub("upgradeData = window.__UPGRADE_DATA__;", text)
             text = text.replace(
                 "</head>", f"<script>window.__UPGRADE_DATA__ = {blob};</script>\n</head>", 1
             )
             notes.append(f"inlined {m.group('json')}")
             inlined += 1
-        elif "fetch(" in text:
-            failures.append(f"{name}: has fetch() but not the expected pattern -- upstream changed")
+
+        text, n = COMPAT_FETCH_RE.subn("Promise.resolve(window.__COMPAT_DATA__)", text)
+        if n:
+            compat = load_json(src / COMPAT_FILE, failures, name)
+            if compat is None:
+                continue
+            # A separate script, not inlined: it's 4 MB and shared by nothing else,
+            # and <script src> loads fine under file://.
+            js_name = COMPAT_FILE.replace(".json", ".js")
+            (OUT / js_name).write_text(
+                "window.__COMPAT_DATA__ = "
+                + json.dumps(compat, separators=(",", ":"))
+                + ";\n",
+                encoding="utf-8",
+            )
+            text = text.replace("</head>", f'<script src="{js_name}"></script>\n</head>', 1)
+            notes.append(f"{COMPAT_FILE} -> {js_name}")
+
+        block = MATRIX_BLOCK_RE.search(text)
+        if block:
+            try:
+                embedded = json.loads(block.group("json"))
+            except json.JSONDecodeError:
+                embedded = None
+            if embedded != matrix:
+                # Upstream re-embeds by hand (embed_vks_matrix.py); catch a missed run.
+                failures.append(f"{name}: embedded {MATRIX_FILE} is stale or invalid")
+                continue
+            seed = (
+                "<script>window._k8sMatrix = window._k8sMatrix || "
+                "JSON.parse(document.getElementById('matrix-data').textContent);</script>"
+            )
+            text = text[: block.end()] + seed + text[block.end() :]
+            notes.append("seeded k8s matrix")
+
+        # Every fetch() left must be a matrix fallback that the seed makes unreachable.
+        stray = FETCH_CALL_RE.findall(MATRIX_FALLBACK_RE.sub("", text) if block else text)
+        if stray:
+            failures.append(f"{name}: has fetch() but not a known pattern -- upstream changed")
             continue
 
-        text, n_merm = MERMAID_RE.subn('src="mermaid.min.js"', text)
-        if n_merm:
-            notes.append("vendored mermaid")
         text, n_cnt = COUNTER_RE.subn("", text)
-        if n_cnt:
-            notes.append("removed tracker")
+        text, n_bcn = BEACON_RE.subn("", text)
+        text, n_ver = VERSION_BEACON_RE.subn("", text)
+        if n_cnt or n_bcn or n_ver:
+            notes.append(f"removed {n_cnt + n_bcn + n_ver} tracker(s)")
 
         (OUT / name).write_text(text, encoding="utf-8")
         print(f"  {name:<74} {', '.join(notes) or 'copied as-is'}")
@@ -218,31 +294,22 @@ def main() -> None:
 
     (OUT / "README.txt").write_text(README, encoding="utf-8")
     shutil.copy2(upstream / "LICENSE", OUT / "LICENSE")
-    (OUT / "THIRD-PARTY-NOTICES.txt").write_text(
-        "THIRD-PARTY NOTICES\n"
-        "===================\n\n"
-        "This package includes the following third-party component:\n\n"
-        f"mermaid v{MERMAID_VERSION} (mermaid.min.js)\n"
-        "https://github.com/mermaid-js/mermaid\n"
-        "Used to render the upgrade workflow diagrams. Included locally so the\n"
-        "tool works without an internet connection.\n\n"
-        + mermaid_license.read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
 
     for junk in OUT.rglob(".DS_Store"):
         junk.unlink()
 
-    # Fail loudly if any external asset reference survived.
-    leaked = [
-        p.name
-        for p in OUT.glob("*.html")
-        if re.search(r'(src|href)="https?://[^"]*\.(js|css|svg|png)', p.read_text(encoding="utf-8"))
-    ]
+    # Fail loudly if any tracker or external asset reference survived.
+    leaked = []
+    for p in sorted(OUT.glob("*.html")) + sorted(OUT.glob("*.js")):
+        t = p.read_text(encoding="utf-8")
+        if "hits.sh" in t:
+            leaked.append(f"{p.name} (hits.sh tracker)")
+        if re.search(r'<(script|link)\b[^>]*\b(src|href)="https?://', t):
+            leaked.append(f"{p.name} (external script/stylesheet)")
     if leaked:
-        sys.exit(f"ERROR: external asset refs still present in: {', '.join(leaked)}")
+        sys.exit("ERROR: external references still present in:\n  " + "\n  ".join(leaked))
 
-    print(f"\nInlined {inlined} scenario pages. No external asset references remain.")
+    print(f"\nInlined {inlined} scenario pages. No trackers or external scripts remain.")
 
     if make_zip:
         zip_path = DIST / "VCF-Upgrade-Planner.zip"
